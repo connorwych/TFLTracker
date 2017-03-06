@@ -1,0 +1,26 @@
+{
+  "name": "tfltracker",
+  "version": "1.0.0",
+  "description": "Script to run on AWS Lambda to alert to discruption to usual route to work",
+  "main": "idea.js",
+  "dependencies": {
+    "form-data": "^2.1.2",
+    "request": "~2.79.0",
+    "twilio": "~2.11.1",
+    "xmlhttprequest": "~1.8.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/connorwych/TFLTracker.git"
+  },
+  "author": "Connor Wycherley",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/connorwych/TFLTracker/issues"
+  },
+  "homepage": "https://github.com/connorwych/TFLTracker#readme"
+}
