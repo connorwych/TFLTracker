@@ -1,64 +1,101 @@
-var XMLHttpRequest	= require("xmlhttprequest").XMLHttpRequest;
+__rootpath = __dirname;
+
+checkTFLStatus("victoria,central,bakerloo");
 
 
-var undergroundRoutes = "victoria";
-var tflCredentials = { applicationID: "689a9029", applicationKey: "c749821d4f1ef2a695e2167ed074a624" };
-var twilloCredentials = { accountSid: "AC1a6af5e2fc5826653760c646b816207f", authToken: "266f208082abc93357d1faff52405f4c",sendingNumber:"+441455561043"};
-var twilloMessageRecipient = {"phoneNumber": "+447921838646", "name": "connor"};
-
-var apiBaseURL = "https://api.tfl.gov.uk/Line/";
-var xhr = new XMLHttpRequest();
-var queryURL = apiBaseURL + undergroundRoutes + "/Status?app_id="+ tflCredentials.applicationID + "&app_key=" + tflCredentials.applicationKey;
-
-xhr.onreadystatechange = function() {
-  if ( xhr.readyState == 4 ) {
-    if ( xhr.status == 200 ) {
-      console.log("XMLHttpRequest complete, returning JSON");
-      var response = JSON.parse(xhr.responseText);
-
-      console.log(response[0].lineStatuses[0].statusSeverity);
-      console.log(response[0].lineStatuses[0].statusSeverityDescription);
-      var message = {};
-      message.body = "victoria line satus is " + response[0].lineStatuses[0].statusSeverityDescription;
-
-      if (10 !== response[0].lineStatuses[0].statusSeverity) {
-        console.log("sending SMS")
-        sendSMS(twilloCredentials, twilloMessageRecipient, message);
-      } else {
-        console.log("Good service - no need to alert")
-      }
-
-    } else {
-      // SHIT BROKE - NO CLUE
-      console.log("Nope");
-    }
-  }
-}
-xhr.open("GET", queryURL, true);
-xhr.send();
+function checkTFLStatus(undergroundRoutes) {
+  var request = require('request')
+  var tflCredentials = require( __rootpath + "/conf/tflcredentials.json");
 
 
-function sendSMS(credentials, recipient, message) {
+  var apiBaseURL = "https://api.tfl.gov.uk/Line/";
+  var queryURL = apiBaseURL + undergroundRoutes + "/Status?app_id="+ tflCredentials.applicationID + "&app_key=" + tflCredentials.applicationKey;
 
   var request = require('request');
+  request.get(queryURL, parseStatus)
+}
+
+function parseStatus(error, response, body ) {
+  if('null' != error) {
+    var responseText = JSON.parse(body);
+    var statusMessage = "";
+    var disruptionFree = true;
+
+    responseText.forEach( function(element) {
+      if (10 != element.lineStatuses[0].statusSeverity) {
+        disruptionFree &= false
+      }
+      statusMessage += element.name + " - Line status: " +  element.lineStatuses[0].statusSeverityDescription + '<br />';
+    });
+
+    if ( !disruptionFree ) {
+      statusMessage += "See https://tfl.gov.uk/tube-dlr-overground/status/ for details";
+      sendEmail(statusMessage)
+    }
+  } else {
+    console.log("error: " + error);
+  }
+}
+
+
+function sendEmail( messageText ) {
+  var nodemailer = require("nodemailer");
+  var mailConfig = require(__rootpath + "/conf/mailcredentials.json");
+  var messageConfig = require(__rootpath + "/conf/mailrecipient.json");
+
+  var message = {};
+
+  message = {
+  			to: messageConfig.EMAIL,
+  			subject: "DISRUPTION TO COMMUTE",
+  			html: messageText
+  		};
+
+  var smtpConfig = {
+  			host: mailConfig.MAIL_HOST,
+  			port: mailConfig.MAIL_PORT,
+  			secure: mailConfig.MAIL_USE_SECURE,
+  			auth: {
+  				user: mailConfig.MAIL_USERNAME,
+  				pass: mailConfig.MAIL_PASSWORD
+  			}
+  		};
+
+  		var transporter = nodemailer.createTransport(smtpConfig);
+  		transporter.sendMail(message, function(error, info){
+  			if(error){
+  				return console.log(error);
+  			}
+  			console.log('Message sent: ' + info.response);
+  		});
+
+}
+
+
+function sendSMS(message) {
+
+  var request = require("request");
+  var credentials = require(__rootpath + "/conf/twiliocredentials");
+  var recipient = require(__rootpath + "/conf/twiliorecipient");
+
+
   var dataString = { form:  {
     To: recipient.phoneNumber,
     From: credentials.sendingNumber,
     Body: message.body
   }}
 
-  // smsURL = "https://"+credentials.accountSid+":"+credentials.authToken+"@api.twilio.com/2010-04-01/Accounts/" + credentials.accountSid +"/Messages.json",
-   smsURL = "https://api.twilio.com/2010-04-01/Accounts/" + credentials.accountSid +"/Messages.json",
+  smsURL = "https://api.twilio.com/2010-04-01/Accounts/" + credentials.accountSid +"/Messages.json",
 
   request
   .post(smsURL, dataString)
   .auth(credentials.accountSid,credentials.authToken, false)
-  .on('response', function(response, body){
+  .on("response", function(response, body){
     console.log(response.statusCode);
     console.log(response.statusCodeText);
     console.log(response.responseText);
   })
-  .on('error', function(err) {
+  .on("error", function(err) {
     console.log(error)
   })
 }
