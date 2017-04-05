@@ -1,11 +1,9 @@
 __rootpath = __dirname;
 
-
-checkTFLStatus("victoria,central")
-exports.myHandler = function(event, context, callback) {
+exports.myHandler = function( event, context, callback ) {
 	console.info("Starting TFL Check" )
 	undergroundRoutes = "victoria,central"
-	checkTFLStatus(undergroundRoutes);
+	checkTFLStatus( undergroundRoutes );
 }
 
 function checkTFLStatus( undergroundRoutes ) {
@@ -15,7 +13,7 @@ function checkTFLStatus( undergroundRoutes ) {
 	var queryURL          = apiBaseURL + undergroundRoutes + "/Status?app_id="+ tflCredentials.applicationID + "&app_key=" + tflCredentials.applicationKey;
 
 	console.info("Requesting Data from TFL");
-	request.get(queryURL, parseStatus);
+	request.get( queryURL, parseStatus );
 }
 
 function parseStatus( error, response, body ) {
@@ -31,7 +29,7 @@ function parseStatus( error, response, body ) {
 
 		for (var i=0; i<responseText.length; i++) {
 			element=responseText[i];
-			if( 10 == element.lineStatuses[0].statusSeverity ) {
+			if( 10 != element.lineStatuses[0].statusSeverity ) {
 				console.info("Found disruption to commute");
 				sendAlert = true;
 				statusMessage.title = "Disruption to commute";
@@ -45,35 +43,63 @@ function parseStatus( error, response, body ) {
 		statusMessage.content = "Could not connect to TFL API"
 		console.error("error: " + error);
 	}
-	console.log(statusMessage.title)
-	console.log(statusMessage.content)
 
 	if ( sendAlert ) {
-		console.log(statusMessage.title)
-		console.log(statusMessage.content)
 		console.info("Sending alert to user");
-		// statusMessage += "See https://tfl.gov.uk/tube-dlr-overground/status/ for details";
-		sendEmail( statusMessage )
+//		statusMessage.content += "See https://tfl.gov.uk/tube-dlr-overground/status/ for details";
+//		sendEmail( statusMessage );
+		sendAWSEmail( statusMessage );
 	} else {
 		console.info("No disruption found");
+
 	}
 }
 
+function sendAWSEmail ( messageText ) {
+	var mailConfig        = require(__rootpath + "/conf/mailcredentials.json");
+	var messageConfig     = require(__rootpath + "/conf/mailrecipient.json");
+	var aws 							= require('aws-sdk');
+	var ses = new aws.SES({
+	   region: 'eu-west-1'
+	});
+
+	var eParams = {
+        Destination: {
+            ToAddresses: [messageConfig.EMAIL]
+        },
+        Message: {
+            Body: {
+                Html: {
+                    Data: messageText.content
+                }
+            },
+            Subject: {
+                Data: messageText.title
+            }
+        },
+        Source: mailConfig.MAIL_ADDRESS
+    };
+		var email = ses.sendEmail(eParams, function( err, data ) {
+        if(err) {
+					console.error( err );
+				}	else {
+					console.log("Email successfully sent");
+        }
+    });
+}
+
+
 
 function sendEmail( messageText ) {
-	console.log(messageText);
-	console.log(messageText)
 	var nodemailer        = require("nodemailer");
 	var mailConfig        = require(__rootpath + "/conf/mailcredentials.json");
 	var messageConfig     = require(__rootpath + "/conf/mailrecipient.json");
-	var message = {
+	var message 					= {
 		to: messageConfig.EMAIL,
 		subject: messageText.title,
 		html: messageText.content
 	};
-
-
-	var smtpConfig = {
+	var smtpConfig 				= {
 		host: mailConfig.MAIL_HOST,
 		port: mailConfig.MAIL_PORT,
 		secure: mailConfig.MAIL_USE_SECURE,
@@ -83,7 +109,7 @@ function sendEmail( messageText ) {
 		}
 	};
 	var transporter 			= nodemailer.createTransport(smtpConfig);
-
+	console.info("Mail object created: sending");
 	transporter.sendMail(message, function(error, info){
 		if(error){
 			console.error(error);
@@ -92,13 +118,11 @@ function sendEmail( messageText ) {
 	});
 
 }
-
-
 function sendSMS( message ) {
 	var request 					= require("request");
 	var credentials 			= require(__rootpath + "/conf/twiliocredentials");
 	var recipient 				= require(__rootpath + "/conf/twiliorecipient");
-	var dataString = { form:  {
+	var dataString 				= { form:  {
 		To: recipient.phoneNumber,
 		From: credentials.sendingNumber,
 		Body: message.body
